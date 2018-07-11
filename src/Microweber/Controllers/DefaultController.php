@@ -81,11 +81,7 @@ class DefaultController extends Controller
             foreach ($cont as $k => $item) {
                 $item['image_tag'] = '';
                 $item['image'] = '';
-                if(!isset($item['description']) or
-                    (isset($item['description'])) and trim($item['description']) == ''){
-                    $item['description'] = content_description($item['id']);
-                }
-
+                $item['description'] = content_description($item['id']);
 
                 if ($embed_images) {
                     $item['image'] = get_picture($item['id']);
@@ -1223,6 +1219,9 @@ class DefaultController extends Controller
             $page = $this->app->content_manager->get_by_id($_REQUEST['content_id']);
         }
 
+        $output_cache_timeout = false;
+
+
         if ($is_quick_edit or $is_preview_template == true or isset($_REQUEST['isolate_content_field']) or $this->create_new_page == true) {
             if (isset($_REQUEST['content_id']) and intval($_REQUEST['content_id']) != 0) {
                 $page = $this->app->content_manager->get_by_id($_REQUEST['content_id']);
@@ -1276,8 +1275,33 @@ class DefaultController extends Controller
                 }
                 template_var('new_page', $page);
             }
+        } else {
+
+            $enable_full_page_cache = get_option('enable_full_page_cache', 'website') == 'y';
+
+            if ($is_editmode == false
+                and !$is_preview_template
+                and !$is_preview_module
+                and $this->isolate_by_html_id == false
+                and !isset($_REQUEST['isolate_content_field'])
+                and !isset($_REQUEST['embed_id'])
+                and !is_cli()
+                and !defined('MW_API_CALL')
+                and !defined('MW_NO_SESSION') 
+            ) {
+
+                $back_to_editmode = $this->app->user_manager->session_get('back_to_editmode');
+
+                if (!$back_to_editmode and !$is_editmode and empty($_GET)) {
+                    if ($enable_full_page_cache) {
+                        $output_cache_timeout = 120;
+                    }
+                }
+
+            }
         }
-        $output_cache_timeout = false;
+
+
         if (isset($is_preview_template) and $is_preview_template != false) {
             if (!defined('MW_NO_SESSION')) {
                 define('MW_NO_SESSION', true);
@@ -1290,7 +1314,7 @@ class DefaultController extends Controller
 
         if ($output_cache_timeout != false) {
             $output_cache_id = __FUNCTION__ . crc32($_SERVER['REQUEST_URI']);
-            $output_cache_group = 'content/preview';
+            $output_cache_group = 'global/full_page_cache';
             $output_cache_content = $this->app->cache_manager->get($output_cache_id, $output_cache_group, $output_cache_timeout);
             if ($output_cache_content != false) {
                 echo $output_cache_content;
@@ -1443,7 +1467,7 @@ class DefaultController extends Controller
                             //  $page['active_site_template'] = $page_url_segment_1;
                             $page['simply_a_file'] = 'clean.php';
                             $page['layout_file'] = 'clean.php';
-
+                            $show_404_to_non_admin = true;
                             if ($all_url_segments) {
                                 $page_url_segments_str_for_file = implode('/', $page_url_segment_3);
                                 $file1 = $page_url_segments_str_for_file . '.php';
@@ -1480,10 +1504,11 @@ class DefaultController extends Controller
                                     template_var('content', $page['content']);
 
                                     template_var('new_page', $page);
+                                    $show_404_to_non_admin = false;
                                 }
                             }
 
-                            $show_404_to_non_admin = true;
+
                         } elseif (is_array($page_url_segment_3)) {
                             foreach ($page_url_segment_3 as $mvalue) {
                                 if ($found_mod == false and $this->app->modules->is_installed($mvalue)) {
@@ -1507,7 +1532,6 @@ class DefaultController extends Controller
                         if (!is_array($page)) {
                             $page = array();
                         }
-
                         $page['id'] = 0;
 
                         if (isset($page_data) and isset($page_data['id'])) {
@@ -1526,6 +1550,8 @@ class DefaultController extends Controller
 
                         template_var('new_page', $page);
                         template_var('simply_a_file', $simply_a_file);
+                        $show_404_to_non_admin = false;
+
                     }
                 }
                 // }
@@ -1634,6 +1660,7 @@ class DefaultController extends Controller
         if (!defined('IS_HOME')) {
             if (isset($content['is_home']) and $content['is_home'] == 1) {
                 define('IS_HOME', true);
+                $this->app->template->head('<link rel="canonical" href="' . site_url() . '">');
             }
         }
 
@@ -1782,7 +1809,7 @@ class DefaultController extends Controller
             //$apijs_loaded = $this->app->template->get_apijs_url() . '?id=' . CONTENT_ID;
 
             $is_admin = $this->app->user_manager->is_admin();
-            $default_css = '<link rel="stylesheet" href="' . mw_includes_url() . 'default.css?v='.MW_VERSION.'" type="text/css" />';
+            $default_css = '<link rel="stylesheet" href="' . mw_includes_url() . 'default.css?v=' . MW_VERSION . '" type="text/css" />';
             $headers = event_trigger('site_header', TEMPLATE_NAME);
             $template_headers_append = '';
             $one = 1;
@@ -1848,41 +1875,44 @@ class DefaultController extends Controller
             if (isset($content['active_site_template']) and $content['active_site_template'] == 'default' and $the_active_site_template != 'default' and $the_active_site_template != 'mw_default') {
                 $content['active_site_template'] = $the_active_site_template;
             }
-            if (isset($content['active_site_template']) and trim($content['active_site_template']) != '' and $content['active_site_template'] != 'default') {
-                if (!defined('CONTENT_TEMPLATE')) {
-                    define('CONTENT_TEMPLATE', $content['active_site_template']);
+
+            if ($is_editmode == true) {
+                if (isset($content['active_site_template']) and trim($content['active_site_template']) != '' and $content['active_site_template'] != 'default') {
+                    if (!defined('CONTENT_TEMPLATE')) {
+                        define('CONTENT_TEMPLATE', $content['active_site_template']);
+                    }
+
+                    $custom_live_edit = TEMPLATES_DIR . DS . $content['active_site_template'] . DS . 'live_edit.css';
+                    $live_edit_css_folder = userfiles_path() . 'css' . DS . $content['active_site_template'] . DS;
+                    $live_edit_url_folder = userfiles_url() . 'css/' . $content['active_site_template'] . '/';
+                    $custom_live_edit = $live_edit_css_folder . DS . 'live_edit.css';
+                } else {
+                    if (!defined('CONTENT_TEMPLATE')) {
+                        define('CONTENT_TEMPLATE', $the_active_site_template);
+                    }
+
+                    //                if ($the_active_site_template == 'mw_default') {
+                    //                    $the_active_site_template = 'default';
+                    //                }
+                    $custom_live_edit = TEMPLATE_DIR . DS . 'live_edit.css';
+
+                    $live_edit_css_folder = userfiles_path() . 'css' . DS . $the_active_site_template . DS;
+                    $live_edit_url_folder = userfiles_url() . 'css/' . $the_active_site_template . '/';
+                    $custom_live_edit = $live_edit_css_folder . 'live_edit.css';
+                }
+                $custom_live_edit = normalize_path($custom_live_edit, false);
+
+                if (is_file($custom_live_edit)) {
+                    $custom_live_editmtime = filemtime($custom_live_edit);
+                    $liv_ed_css = '<link rel="stylesheet" href="' . $live_edit_url_folder . 'live_edit.css?version=' . $custom_live_editmtime . '" id="mw-template-settings" type="text/css" />';
+                    $l = str_ireplace('</head>', $liv_ed_css . '</head>', $l);
                 }
 
-                $custom_live_edit = TEMPLATES_DIR . DS . $content['active_site_template'] . DS . 'live_edit.css';
-                $live_edit_css_folder = userfiles_path() . 'css' . DS . $content['active_site_template'] . DS;
-                $live_edit_url_folder = userfiles_url() . 'css/' . $content['active_site_template'] . '/';
-                $custom_live_edit = $live_edit_css_folder . DS . 'live_edit.css';
-            } else {
-                if (!defined('CONTENT_TEMPLATE')) {
-                    define('CONTENT_TEMPLATE', $the_active_site_template);
+                $liv_ed_css = $this->app->template->get_custom_css_url();
+                if ($liv_ed_css != false) {
+                    $liv_ed_css = '<link rel="stylesheet" href="' . $liv_ed_css . '" id="mw-custom-user-css" type="text/css" />';
+                    $l = str_ireplace('</head>', $liv_ed_css . '</head>', $l);
                 }
-
-                //                if ($the_active_site_template == 'mw_default') {
-                //                    $the_active_site_template = 'default';
-                //                }
-                $custom_live_edit = TEMPLATE_DIR . DS . 'live_edit.css';
-
-                $live_edit_css_folder = userfiles_path() . 'css' . DS . $the_active_site_template . DS;
-                $live_edit_url_folder = userfiles_url() . 'css/' . $the_active_site_template . '/';
-                $custom_live_edit = $live_edit_css_folder . 'live_edit.css';
-            }
-            $custom_live_edit = normalize_path($custom_live_edit, false);
-
-            if (is_file($custom_live_edit)) {
-                $custom_live_editmtime = filemtime($custom_live_edit);
-                $liv_ed_css = '<link rel="stylesheet" href="' . $live_edit_url_folder . 'live_edit.css?version=' . $custom_live_editmtime . '" id="mw-template-settings" type="text/css" />';
-                $l = str_ireplace('</head>', $liv_ed_css . '</head>', $l);
-            }
-
-            $liv_ed_css = $this->app->template->get_custom_css_url();
-            if ($liv_ed_css != false) {
-                $liv_ed_css = '<link rel="stylesheet" href="' . $liv_ed_css . '" id="mw-custom-user-css" type="text/css" />';
-                $l = str_ireplace('</head>', $liv_ed_css . '</head>', $l);
             }
             $website_head_tags = $this->app->option_manager->get('website_head', 'website');
             $rep_count = 1;
@@ -1894,6 +1924,7 @@ class DefaultController extends Controller
                 $generator_tag = "\n" . '<meta name="generator" content="Microweber" />' . "\n";
                 $l = str_ireplace('</head>', $generator_tag . '</head>', $l, $rep_count);
             }
+
 
             if ($is_editmode == true and $this->isolate_by_html_id == false and !isset($_REQUEST['isolate_content_field'])) {
                 if ($is_admin == true) {
@@ -1947,6 +1978,12 @@ class DefaultController extends Controller
                         }
                     }
                 }
+            } else {
+                $optimize_asset_loading = get_option('optimize_asset_loading', 'website');
+                if ($optimize_asset_loading == 'y') {
+                    $l = $this->app->parser->optimize_asset_loading_order($l);
+
+                }
             }
 
 
@@ -1972,8 +2009,7 @@ class DefaultController extends Controller
 //
 //            $l = str_replace($replaces, $replaces_vals, $l);
 
-            $l =$this->app->parser->replace_url_placeholders($l);
-
+            $l = $this->app->parser->replace_url_placeholders($l);
 
 
 //            $l = str_replace('{TEMPLATE_URL}', TEMPLATE_URL, $l);
@@ -2012,7 +2048,10 @@ class DefaultController extends Controller
             }
 
             if ($output_cache_timeout != false) {
-                $this->app->cache_manager->save($l, $output_cache_id, $output_cache_group);
+
+
+                $l = $this->app->parser->replace_non_cached_modules_with_placeholders($l);
+                $this->app->cache_manager->save($l, $output_cache_id, $output_cache_group,$output_cache_timeout);
             }
 
             if (isset($_REQUEST['debug'])) {
@@ -2480,7 +2519,7 @@ class DefaultController extends Controller
             $apijs_settings_loaded = $this->app->template->get_apijs_settings_url();
 
             // $is_admin = $this->app->user_manager->is_admin();
-            $default_css = '<link rel="stylesheet" href="' . mw_includes_url() . 'default.css?v='.MW_VERSION.'" type="text/css" />';
+            $default_css = '<link rel="stylesheet" href="' . mw_includes_url() . 'default.css?v=' . MW_VERSION . '" type="text/css" />';
             $headers = event_trigger('site_header', TEMPLATE_NAME);
             $template_headers_append = '';
             $one = 1;
@@ -2632,6 +2671,7 @@ class DefaultController extends Controller
         }
 
         $layout = mw()->template->process_meta($layout);
+
 
         $layout = $this->app->parser->process($layout, $options = false);
 

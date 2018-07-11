@@ -12,8 +12,14 @@ description: Calendar Default
 
 ?>
 
+
+<?php
+$mod_id = $params['id'];
+$mod_suffix = md5($params['id']);
+?>
+
 <script>
-	 	mw.lib.require('jqueryui');
+     mw.lib.require('jqueryui');
      mw.require("<?php print $config['url_to_module'];?>fullcalendar-3.1.0/fullcalendar.min.css");
      mw.require("<?php print $config['url_to_module'];?>fullcalendar-3.1.0/lib/moment.min.js");
      mw.require("<?php print $config['url_to_module'];?>fullcalendar-3.1.0/fullcalendar.min.js");
@@ -36,9 +42,9 @@ description: Calendar Default
 	$(document).ready(function() {
 
 		$(document).bind('calendar.update', function(){
-		  getData();
-			$('.calendar').fullCalendar('removeEvents');
-			$('.calendar').fullCalendar('addEventSource',JSON.parse(json_events));
+		  getData<?php print $mod_suffix ?>();
+			$('.calendar', '#<?php print $mod_id ?>').fullCalendar('removeEvents');
+			$('.calendar').fullCalendar('addEventSource',json_events);
 		});
 
 
@@ -94,21 +100,22 @@ description: Calendar Default
 
 			viewRender: function (view, element) {
 				// getData for selected year-month
-				getData();
+				getData<?php print $mod_suffix ?>();
+
 				$('.calendar').fullCalendar('removeEvents');
-				$('.calendar').fullCalendar('addEventSource',JSON.parse(json_events));
+				$('.calendar').fullCalendar('addEventSource',json_events);
  			},
 		});
 
-		function getData(){
+		function getData<?php print $mod_suffix ?>(){
 			var date = $(".calendar").fullCalendar('getDate');
 			var y = date.year();
 			var m = ("0" + (date.month() + 1)).slice(-2);
 			var yearmonth = y+'-'+m;
 			$.ajax({
-				url: '<?php print api_url('get_events'); ?>',
+				url: '<?php print api_url('calendar_get_events_api'); ?>',
 				type: 'POST', // Send post data
-				data: 'yearmonth='+yearmonth,
+				data: 'yearmonth='+yearmonth+'&calendar_group_id=<?php print $calendar_group_id ?>',
 				async: false,
 				success: function(s){
 					json_events = s;

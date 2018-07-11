@@ -1,7 +1,6 @@
 <?php
 
-//if($size != 'auto') $size = ' width:' . $size . 'px';
-$size = ($size == 'auto' ? '' : ' width:' . $size . 'px');
+$size = ($size == 'auto' ? '' : ' max-width:' . $size . 'px');
 
 $style = ($size == '' ? '' : ' style="' . $size . '"');
 ?>
@@ -11,8 +10,8 @@ $style = ($size == '' ? '' : ' style="' . $size . '"');
     <?php print lnotif('Click to add image'); ?>
 <?php else: ?>
     <div class="mw-rollover"<?php print $style; ?>>
-        <div class="mw-rollover-images">
-            <a href="<?php print $href_url; ?>"><img class="mw-rollover-default-image" src="<?php print $default_image; ?>" alt=""<?php print $style; ?>/></a>
+        <div class="mw-rollover_images">
+            <a href="<?php print $href_url; ?>"><img class="mw-rollover-default_image" src="<?php print $default_image; ?>" alt=""<?php print $style; ?>/></a>
             <div class="mw-rollover-overlay">
                 <a href="<?php print $href_url; ?>"<?php print $style; ?>><img src="<?php print $rollover_image; ?>" alt=""<?php print $style; ?>/></a>
             </div>

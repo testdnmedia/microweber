@@ -2824,14 +2824,9 @@ input#edit-content-url:focus, input#edit-content-url.active {
     text-overflow: ellipsis;
     min-width: 20px;
     min-height: 11px;
-    top: 1px;
+    top: -4px;
     position: relative;
-
-}
-
-.edit-post-url, .edit-post-url .mw-ui-invisible-field {
-    font-size: 11px;
-    color: #CCCCCC;
+    line-height: 12px;
 }
 
 #edit-content-url {
@@ -2839,10 +2834,14 @@ input#edit-content-url:focus, input#edit-content-url.active {
 }
 
 .edit-post-url .mw-ui-invisible-field {
+    font-size: 12px;
+    line-height: 12px;
+    color: #CCCCCC;
     top: 0;
     left: -1px;
-    height: 14px;
+    height: 16px;
     padding: 0px;
+    top: -5px;
 }
 
 .edit-post-url,
@@ -2854,7 +2853,7 @@ input#edit-content-url:focus, input#edit-content-url.active {
 .edit-post-url {
     clear: both;
     padding-top: 0;
-    top: 0;
+    top: 3px;
     position: relative;
 }
 
@@ -7497,9 +7496,16 @@ select.silver-field {
     display: block;
 }
 
-.mw-advanced-settings .box-title i{
+.mw-advanced-settings .box-title i {
     font-size: 24px;
     height: 24px;
     margin-bottom: 10px;
     display: block;
 }
+
+#mw-admin-edit-category-item-module-categories-selector .mw-ui-check:before {
+
+    display: none;
+}
+
+

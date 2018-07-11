@@ -1,5 +1,8 @@
 <?php only_admin_access(); ?>
 
+
+<?php $calendar_group_id = get_option('calendar_group_id',$params['id']); ?>
+
 <div class="module-live-edit-settings">
 
     <style>
@@ -19,12 +22,10 @@
 
     <script>
 
+        mw.require('ui.css');
 
         mw.lib.require('jqueryui');
-    </script>
 
-    <script>
-        //mw.lib.require('jqueryui'); // hyphen removed due to mw bug
         mw.require("<?php print $config['url_to_module'];?>fullcalendar-3.1.0/fullcalendar.min.css");
         mw.require("<?php print $config['url_to_module'];?>fullcalendar-3.1.0/lib/moment.min.js");
         mw.require("<?php print $config['url_to_module'];?>fullcalendar-3.1.0/fullcalendar.min.js");
@@ -81,7 +82,16 @@
         }
     </style>
     <script>
+
+        var editModal;
+
         $(document).ready(function () {
+
+//            content_id = 0;
+//
+//            $("#postSearch").on("postSelected", function(event, data){
+//                content_id = data.id;
+//            })
 
             var zone = '<?php echo date('P');?>';
 
@@ -118,7 +128,7 @@
             /* initialize the calendar
              -----------------------------------------------------------------*/
 
-            $('#calendar').fullCalendar({
+            calendar = $('#calendar').fullCalendar({
                 //events for selected month are loaded in viewRender event
                 //events: JSON.parse(json_events),
                 // test event
@@ -135,27 +145,24 @@
 
                 eventReceive: function (event) {
                     var title = event.title;
-                    var start = event.start.format("YYYY-MM-DD[T]HH:mm:SS");
-                    console.log('eventReceive start: ' + start);
+                    var start = event.start.format("YYYY-MM-DD 12:00");
+                    var end = event.start.format("YYYY-MM-DD 13:00");
                     $.ajax({
-                        url: '<?php print api_url('new_event');?>',
-                        data: 'title=' + title + '&startdate=' + start + '&zone=' + zone,
+                        url: '<?php print api_url('calendar_new_event');?>',
+                        data: 'title=' + title + '&startdate=' + start + '&enddate=' + end + '&zone=' + zone+'&calendar_group_id=<?php print $calendar_group_id ?>',
                         type: 'POST',
                         dataType: 'json',
                         success: function (response) {
                             event.id = response.eventid;
                             $('#calendar').fullCalendar('updateEvent', event);
-
                             reload_calendar_after_save();
-
                         },
                         error: function (e) {
                             console.log(e.responseText);
-
                         }
                     });
                     $('#calendar').fullCalendar('updateEvent', event);
-                    console.log(event);
+
                 },
 
                 eventDrop: function (event, delta, revertFunc) {
@@ -163,8 +170,8 @@
                     var start = event.start.format();
                     var end = (event.end == null) ? start : event.end.format();
                     $.ajax({
-                        url: '<?php print api_url('reset_date');?>',
-                        data: 'title=' + title + '&start=' + start + '&end=' + end + '&eventid=' + event.id,
+                        url: '<?php print api_url('calendar_reset_date');?>',
+                        data: 'title=' + title + '&start=' + start + '&end=' + end + '&event_id=' + event.id+'&calendar_group_id=<?php print $calendar_group_id ?>',
                         type: 'POST',
                         dataType: 'json',
                         success: function (response) {
@@ -181,71 +188,11 @@
                 },
 
                 eventClick: function (event, jsEvent, view) {
-                    console.log(event.id);
-                    //var title = prompt('Event Title:', event.title, { buttons: { Ok: true, Cancel: false} });
-                    $("#title").val(event.title);
-                    $("#description").val(event.description);
-
-                    /*
-                     if(event.allDay == true) {
-                     $("#eventContent .time").hide();
-                     $("#allDay").prop( "checked", true );
-                     } else {
-                     $("#eventContent .time").show();
-                     }
-                     */
-                    var startDate = moment(event.start).format("YYYY-MM-DD");
-                    var startTime = moment(event.start).format('hh:mm');
-                    if (startTime == "12:00") startTime = "00:00";
-                    $("#starttime").val(startTime);
-                    if (event.end != null) {
-                        var endDate = moment(event.end).format("YYYY-MM-DD");
-                        var endTime = moment(event.end).format('hh:mm');
-                        $("#endtime").val(endTime);
+                    if(typeof(event.id) != 'undefined'){
+                        var data = {};
+                        data.event_id = event.id;
+                        editModal = mw.tools.open_module_modal('calendar/edit_event',data, {overlay:true, skin:'simple'})
                     }
-
-                    $("#eventContent").dialog({
-                        modal: true,
-                        resizable: false,
-                        title: event.title,
-                        width: 350,
-                        buttons: {
-                            "Cancel": function () {
-                                $(this).dialog("close");
-                            },
-                            "Save": function () {
-                                event.title = $("#title").val();
-                                event.description = $("#description").val();
-                                event.start = moment(startDate + ' ' + $("#starttime").val()).format("YYYY-MM-DD[T]HH:mm:SS");
-                                event.end = moment((event.end != null ? endDate : startDate) + ' ' + $("#endtime").val()).format("YYYY-MM-DD[T]HH:mm:SS");
-
-                                console.log('function=change_title&title=' + event.title + '&description=' + event.description + '&eventid=' + event.id + '&start=' + event.start + '&end=' + event.end);
-                                $.ajax({
-                                    url: '<?php print api_url('change_title');?>',
-                                    data: 'title=' + event.title + '&description=' + event.description + '&eventid=' + event.id + '&start=' + event.start + '&end=' + event.end + '&zone=' + zone,
-                                    type: 'POST',
-                                    dataType: 'json',
-                                    success: function (response) {
-                                        if (response.status == 'success')
-                                            $('#calendar').fullCalendar('updateEvent', event);
-                                    },
-                                    error: function (e) {
-                                        alert('Error processing your request: ' + e.responseText);
-                                    }
-                                });
-                                $(this).dialog("close");
-                            },
-                            "Delete": {
-                                class: 'leftButton',
-                                text: '<?php _e('Delete'); ?>',
-                                click: function () {
-                                    deleteEvent(event);
-                                    $(this).dialog("close");
-                                }
-                            }
-                        }
-                    });
-
                 },
 
                 eventResize: function (event, delta, revertFunc) {
@@ -255,7 +202,7 @@
                     var start = event.start.format();
                     //console.log('end: '+end);
                     $.ajax({
-                        url: '<?php print api_url('reset_date');?>',
+                        url: '<?php print api_url('calendar_reset_date');?>',
                         data: 'title=' + title + '&start=' + start + '&end=' + end + '&eventid=' + event.id + '&zone=' + zone,
                         type: 'POST',
                         dataType: 'json',
@@ -280,7 +227,7 @@
                     // getData for selected year-month
                     getData();
                     $('#calendar').fullCalendar('removeEvents');
-                    $('#calendar').fullCalendar('addEventSource', JSON.parse(json_events));
+                    $('#calendar').fullCalendar('addEventSource', json_events);
                 },
 
                 eventMouseover: function (event, element) {
@@ -319,7 +266,7 @@
                 var con = confirm('<?php _e('Are you sure to delete this event permanently?'); ?>');
                 if (con == true) {
                     $.ajax({
-                        url: '<?php print api_url('remove_event');?>',
+                        url: '<?php print api_url('calendar_remove_event');?>',
                         data: 'eventid=' + event.id,
                         type: 'POST',
                         dataType: 'json',
@@ -329,7 +276,7 @@
                                 $('#calendar').fullCalendar('removeEvents', event.id);  // not reliable
                                 getData();
                                 $('#calendar').fullCalendar('removeEvents');
-                                $('#calendar').fullCalendar('addEventSource', JSON.parse(json_events));
+                                $('#calendar').fullCalendar('addEventSource', json_events);
                                 //getFreshEvents();
                                 reload_calendar_after_save();
                             }
@@ -340,100 +287,99 @@
                     });
                 }
             }
-
-            function getData(yearmonth) {
-                // getData for selected year-month
-                var date = $("#calendar").fullCalendar('getDate');
-                var y = date.year();
-                var m = ("0" + (date.month() + 1)).slice(-2);
-                var yearmonth = y + '-' + m;
-                $.ajax({
-                    url: '<?php print api_url('get_events');?>',
-                    type: 'POST', // Send post data
-                    data: 'yearmonth=' + yearmonth,
-                    async: false,
-                    success: function (s) {
-                        json_events = s;
-                    }
-                });
-            }
-
             function isElemOverDiv() {
                 var trashEl = jQuery('#trash');
-
                 var ofs = trashEl.offset();
-
                 var x1 = ofs.left;
                 var x2 = ofs.left + trashEl.outerWidth(true);
                 var y1 = ofs.top;
                 var y2 = ofs.top + trashEl.outerHeight(true);
-
                 if (currentMousePos.x >= x1 && currentMousePos.x <= x2 &&
                     currentMousePos.y >= y1 && currentMousePos.y <= y2) {
                     return true;
                 }
                 return false;
             }
-
             $('#newevent').tooltip();
             $('#trash').tooltip();
-
         });
+        function getData(yearmonth) {
+            // getData for selected year-month
+            var date = $("#calendar").fullCalendar('getDate');
 
+            var selected_group = $('select[name="calendar_group_id"] option:selected').val();
+
+            var y = date.year();
+            var m = ("0" + (date.month() + 1)).slice(-2);
+            var yearmonth = y + '-' + m;
+            $.ajax({
+                url: '<?php print api_url('calendar_get_events_api');?>',
+                type: 'POST', // Send post data
+                data: 'yearmonth=' + yearmonth+'&calendar_group_id='+selected_group,
+                async: false,
+                success: function (s) {
+                    json_events = s;
+
+                }
+            });
+        }
         function reload_calendar_after_save() {
             //mw.reload_module_parent('#<?php print $params['id'] ?>');
             window.parent.$(window.parent.document).trigger('calendar.update');
-
+            if(typeof(editModal) != 'undefined' && editModal.modal){
+                editModal.modal.remove();
+            }
+            getData();
+        //    $("#calendar").fullCalendar( 'updateEvents', json_events )
+             calendar.fullCalendar( 'refetchEvents' )
+             calendar.fullCalendar( 'rerenderEvents' )
         }
     </script>
 
-
-    <?php
-    // TODO:
-    // if start time changed then change end time options to be after
-    // if start time is set then only show options before end time
-    // if end time set then only show options after start time
-    $time_options = '';
-    $range = range(strtotime("00:00"), strtotime("23:30"), 30 * 60);
-    foreach ($range as $time) {
-        $time_options .= '<option value="' . date("H:i", $time) . '">' . date("h:i a", $time) . "</option>\n";
-    }
-    ?>
-    <div id="eventContent" title="Event Details" style="display:none;">
-        <div class="row" style="margin-top:10px;">
-            <label for="title"><?php _e('Event Title:'); ?></label>
-            <div class="col"><input id="title" class="colElement" type="text"/></div>
+    <div id="tabsnav">
+        <div class="mw-ui-btn-nav mw-ui-btn-nav-tabs">
+            <a href="javascript:;" class="mw-ui-btn active tabnav">Events</a>
+            <a href="javascript:;" class="mw-ui-btn tabnav">Groups</a>
+            <a href="javascript:;" class="mw-ui-btn tabnav">Skin/Template</a>
         </div>
-        <div class="row">
-            <label for="description"><?php _e('Description:'); ?></label>
-            <div class="col"><textarea id="description" class="colElement" rows="4" cols="20"> </textarea></div>
-        </div>
-        <?php /*
-	<div class="row allDay">
-		<label for="allDay">All day:</label><input type="checkbox" id="allDay" name="allDay" value="1">
-	</div>
-	*/ ?>
-        <div class="row time">
-            <label for="starttime"><?php _e('Start Time:'); ?></label>
-            <div class="col"><select id="starttime"><?php print $time_options; ?></select></div>
-        </div>
-        <div class="row time">
-            <label for="endtime"><?php _e('End Time:'); ?></label>
-            <div class="col"><select id="endtime"><?php print $time_options; ?></select></div>
-        </div>
-    </div>
-
-    <div id="external-events">
-        <p id="trash"><img data-toggle="tooltip" data-placement="auto" title="<?php _e('Remove event by dragging to dustbin'); ?>"
-                           src="<?php print $config['url_to_module']; ?>trashcan.png" alt=""></p>
-        <div style="float:left">
-            <div id="newevent" draggable="true" data-toggle="tooltip" data-placement="right" class="fc-event"
-                 title="<?php _e('Create new event by dragging to calendar'); ?>"><?php _e('New Event'); ?>
+        <div class="mw-ui-box">
+            <div class="mw-ui-box-content tabitem">
+                <?php
+                // TODO:
+                // if start time changed then change end time options to be after
+                // if start time is set then only show options before end time
+                // if end time set then only show options after start time
+                $time_options = '';
+                $range = range(strtotime("00:00"), strtotime("23:30"), 30 * 60);
+                foreach ($range as $time) {
+                    $time_options .= '<option value="' . date("H:i", $time) . '">' . date("h:i a", $time) . "</option>\n";
+                }
+                ?>
+                <div id="external-events">
+                    <p id="trash"><img data-toggle="tooltip" data-placement="auto" title="<?php _e('Remove event by dragging to dustbin'); ?>"
+                                       src="<?php print $config['url_to_module']; ?>trashcan.png" alt=""></p>
+                    <div style="float:left">
+                        <div id="newevent" draggable="true" data-toggle="tooltip" data-placement="right" class="fc-event"
+                             title="<?php _e('Create new event by dragging to calendar'); ?>"><?php _e('New Event'); ?>
+                        </div>
+                    </div>
+                    <module type="calendar/group_select" calendar-group-module-id="<?php print $params['id'] ?>"  />
+                    <div style='clear:both'></div>
+                </div>
+                <div id='calendar'></div>
+            </div>
+            <div class="mw-ui-box-content tabitem" style="display: none"><module type="calendar/edit_groups"  /> </div>
+            <div class="mw-ui-box-content tabitem" style="display: none">        <module type="admin/modules/templates" simple="true"/>
             </div>
         </div>
-        <module type="admin/modules/templates" simple="true"/>
-        <div style='clear:both'></div>
     </div>
 
-    <div id='calendar'></div>
+    <script>
+        $(document).ready(function(){
+            mw.tabs({
+                nav:'#tabsnav  .tabnav',
+                tabs:'#tabsnav .tabitem'
+            });
+        });
+    </script>
 </div>

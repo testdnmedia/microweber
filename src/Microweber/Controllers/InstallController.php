@@ -136,24 +136,22 @@ class InstallController extends Controller
                 Config::set('microweber.pre_configured_input', null);
             }
 
-            $secret_key = Config::get('app.key') == 'YourSecretKey!!!';
-            if (!$secret_key or $secret_key == 'YourSecretKey!!!') {
+
+            if (Config::get('app.key') == 'YourSecretKey!!!') {
                 if (!is_cli()) {
                     $_SERVER['argv'] = array();
                 }
                 $this->log('Generating key');
-                // if (!$this->_can_i_use_artisan_key_generate_command()) {
-                $fallback_key = str_random(32);
-                $fallback_key_str = 'base64:' . base64_encode($fallback_key);
-
-                Config::set('app.key', $fallback_key_str);
-                $allowed_configs[] = 'app';
-//                } else {
-//                 https://github.com/laravel/framework/issues/20719
-//                    Artisan::call('key:generate', [
-//                        '--force' => true,
-//                    ]);
-//                }
+                if (!$this->_can_i_use_artisan_key_generate_command()) {
+                    $fallback_key = str_random(32);
+                    $fallback_key_str = 'base64:' . base64_encode($fallback_key);
+                    Config::set('app.key', $fallback_key_str);
+                    $allowed_configs[] = 'app';
+                } else {
+                    Artisan::call('key:generate', [
+                        '--force' => true,
+                    ]);
+                }
             }
 
             $this->log('Saving config');
@@ -204,6 +202,7 @@ class InstallController extends Controller
                 if (!$install_step or $install_step == 3) {
                     $this->log('Setting up template');
                     $installer = new Install\TemplateInstaller();
+                    $installer->logger = $this;
                     $installer->run();
                 }
                 if (!$install_step or $install_step == 4) {
@@ -223,6 +222,8 @@ class InstallController extends Controller
                         if ($install_step == 5) {
                             $install_step_return['finalize'] = true;
                             $install_step_return['install_step'] = 'finalize';
+
+                            $this->reportInstall($input['admin_email'], $input['subscribe_for_update_notification']);
                         }
                         return $install_step_return;
                     }
@@ -341,10 +342,30 @@ class InstallController extends Controller
         if ($is_installed) {
             App::abort(403, 'Unauthorized action. Microweber is already installed.');
         }
+
         $layout->assign('done', $is_installed);
         $layout = $layout->__toString();
         Cache::flush();
         return $layout;
+    }
+
+    private function reportInstall($email, $sendMail = false)
+    {
+        $um = new \Microweber\Providers\UpdateManager(app());
+        $data = $um->collect_local_data();
+        if ($sendMail) {
+            $data['email'] = $email;
+        }
+        $postData = array();
+        $postData['postdata'] = base64_encode(json_encode($data));
+        $http = new \Microweber\Utils\Http(app());
+        try {
+            $http->url('http://installreport.services.microweberapi.com')->post($postData);
+        } catch (\Exception $e) {
+            //maybe internet connection problem
+        }
+
+
     }
 
     public function log($text)
